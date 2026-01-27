@@ -102,6 +102,90 @@ def clamp_roi(roi: Tuple[int, int, int, int], width: int, height: int) -> Tuple[
     return (x, y, w, h)
 
 
+def _load_image_uint8_rgb(path: Path) -> np.ndarray:
+    img = Image.open(path).convert("RGB")
+    return np.asarray(img, dtype=np.uint8)
+
+
+def _apply_roi_uint8(img_rgb: np.ndarray, roi: Tuple[int, int, int, int]) -> np.ndarray:
+    h, w = img_rgb.shape[:2]
+    x, y, rw, rh = clamp_roi(tuple(map(int, roi)), width=w, height=h)
+    return img_rgb[y : y + rh, x : x + rw]
+
+
+@st.cache_resource(show_spinner=False)
+def _load_shap_gokart_model(model_path: str):
+    """Charge le modèle et expose une sortie scalaire P(go_kart).
+
+    Utilise la même convention que predict.py:
+    - La tête Sigmoid produit P(classe index 1)
+    - On convertit vers P(go_kart) selon class_to_idx (si présent)
+    """
+    import torch
+    import torch.nn as nn
+    from torchvision import models
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    checkpoint = torch.load(model_path, map_location=device)
+
+    base = models.resnet18(pretrained=False)
+    num_features = base.fc.in_features
+    base.fc = nn.Sequential(
+        nn.Dropout(0.5),
+        nn.Linear(num_features, 256),
+        nn.ReLU(),
+        nn.Dropout(0.3),
+        nn.Linear(256, 1),
+        nn.Sigmoid(),
+    )
+    base.load_state_dict(checkpoint["model_state_dict"])
+    base.to(device)
+    base.eval()
+
+    class_to_idx = checkpoint.get("class_to_idx")
+    if isinstance(class_to_idx, dict) and "go_kart" in class_to_idx:
+        go_kart_index = int(class_to_idx["go_kart"])
+    else:
+        go_kart_index = 0
+
+    mean = torch.tensor([0.485, 0.456, 0.406], device=device).view(1, 3, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225], device=device).view(1, 3, 1, 1)
+
+    def preprocess_uint8_batch(images_nhwc_uint8: np.ndarray) -> "torch.Tensor":
+        x = np.clip(images_nhwc_uint8, 0, 255).astype(np.float32) / 255.0
+        tensor = torch.from_numpy(x).permute(0, 3, 1, 2).to(device)
+        return (tensor - mean) / std
+
+    class GoKartProbabilityModel(nn.Module):
+        def __init__(self, base_model: nn.Module, go_idx: int):
+            super().__init__()
+            self.base = base_model
+            self.go_idx = int(go_idx)
+
+        def forward(self, x):
+            p_class1 = self.base(x).squeeze(1)
+            p_go = p_class1 if self.go_idx == 1 else (1.0 - p_class1)
+            return p_go.unsqueeze(1)
+
+    gokart_model = GoKartProbabilityModel(base, go_kart_index)
+    gokart_model.eval()
+    return gokart_model, preprocess_uint8_batch, device
+
+
+@st.cache_resource(show_spinner=False)
+def _load_shap_background_uint8(limit: int = 8) -> list[np.ndarray]:
+    """Background stable pour SHAP (images du circuit vide si disponibles)."""
+    candidates: list[np.ndarray] = []
+    empty_dir = Path("extracted_empty_circuit")
+    if empty_dir.exists():
+        for p in sorted(empty_dir.glob("*.jpg"))[:limit]:
+            try:
+                candidates.append(_load_image_uint8_rgb(p))
+            except Exception:
+                continue
+    return candidates
+
+
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 
 st.title(APP_TITLE)
@@ -191,7 +275,7 @@ st.session_state["roi_manual"] = roi
 # Aperçu
 preview = first_frame_rgb.copy()
 cv2.rectangle(preview, (roi[0], roi[1]), (roi[0] + roi[2], roi[1] + roi[3]), (0, 255, 0), 3)
-st.image(preview, caption="Aperçu ROI (rectangle vert)", use_container_width=True)
+st.image(preview, caption="Aperçu ROI (rectangle vert)", width="stretch")
 
 if roi is None:
     st.warning("Aucune ROI dessinée: l'analyse se fera sur l'image complète (moins fiable).")
@@ -269,7 +353,7 @@ if last_run_dir and Path(last_run_dir).exists() and last_summary:
         if detections_all:
             top = sorted(detections_all, key=lambda r: r.get("probability", 0.0), reverse=True)[:10]
             st.subheader("Top 10 scores")
-            st.dataframe(top, use_container_width=True)
+            st.dataframe(top, width="stretch")
 
     frames_dir = run_dir / "frames"
     roi_samples_dir = run_dir / "roi_samples"
@@ -280,16 +364,157 @@ if last_run_dir and Path(last_run_dir).exists() and last_summary:
         st.markdown("**Frames détectées**")
         if frames_dir.exists():
             imgs = sorted(frames_dir.glob("*.jpg"))
-            st.image([str(p) for p in imgs[:30]], use_container_width=True)
+            st.image([str(p) for p in imgs[:30]], width="stretch")
         else:
             st.info("Aucune frame détectée sauvegardée.")
     with c2:
         st.markdown("**ROI samples (debug)**")
         if roi_samples_dir.exists():
             imgs = sorted(roi_samples_dir.glob("*.jpg"))
-            st.image([str(p) for p in imgs[:30]], use_container_width=True)
+            st.image([str(p) for p in imgs[:30]], width="stretch")
         else:
             st.info("Aucun ROI sample.")
+
+    st.divider()
+    st.subheader("Explainability (SHAP)")
+    st.caption("Génère une heatmap SHAP pour voir quelles zones poussent la prédiction vers 'go_kart'.")
+
+    # Sources possibles pour l'image à expliquer
+    available_frame_imgs = sorted(frames_dir.glob("*.jpg")) if frames_dir.exists() else []
+    available_roi_imgs = sorted(roi_samples_dir.glob("*.jpg")) if roi_samples_dir.exists() else []
+
+    src = st.radio(
+        "Choisir l'image à expliquer",
+        options=["Frame détectée", "ROI sample", "Upload image"],
+        horizontal=True,
+    )
+
+    chosen_path: Optional[Path] = None
+    uploaded_img = None
+    apply_roi = False
+
+    if src == "Frame détectée":
+        if not available_frame_imgs:
+            st.info("Aucune frame détectée disponible. Active 'Sauvegarder les frames détectées' puis relance l'analyse.")
+        else:
+            chosen_path = st.selectbox(
+                "Frame",
+                options=available_frame_imgs,
+                format_func=lambda p: p.name,
+            )
+            apply_roi = st.checkbox("Appliquer la ROI avant SHAP", value=True)
+
+    elif src == "ROI sample":
+        if not available_roi_imgs:
+            st.info("Aucun ROI sample disponible. Mets 'Sauver N crops ROI (debug)' > 0 puis relance l'analyse.")
+        else:
+            chosen_path = st.selectbox(
+                "ROI sample",
+                options=available_roi_imgs,
+                format_func=lambda p: p.name,
+            )
+            apply_roi = st.checkbox("Appliquer la ROI avant SHAP", value=False, disabled=True)
+
+    else:
+        uploaded_img = st.file_uploader("Upload une image", type=["jpg", "jpeg", "png", "bmp"], key="shap_upload")
+        apply_roi = st.checkbox("Appliquer la ROI avant SHAP", value=False)
+
+    explain_btn = st.button("Afficher SHAP", type="secondary")
+
+    if explain_btn:
+        if uploaded_img is None and chosen_path is None:
+            st.warning("Choisis une image (ou upload) avant de lancer SHAP.")
+        else:
+            with st.spinner("Calcul SHAP (ça peut prendre ~10-60s sur CPU)..."):
+                import shap
+                import matplotlib
+
+                matplotlib.use("Agg")
+                import matplotlib.pyplot as plt
+
+                # Charger l'image
+                if uploaded_img is not None:
+                    img = Image.open(uploaded_img).convert("RGB")
+                    img_rgb = np.asarray(img, dtype=np.uint8)
+                    img_name = Path(uploaded_img.name).stem
+                else:
+                    img_rgb = _load_image_uint8_rgb(chosen_path)  # type: ignore[arg-type]
+                    img_name = chosen_path.stem  # type: ignore[union-attr]
+
+                # Appliquer ROI si demandé
+                roi_for_shap = last_summary.get("roi") if isinstance(last_summary, dict) else None
+                if apply_roi and roi_for_shap is not None:
+                    img_rgb = _apply_roi_uint8(img_rgb, roi_for_shap)
+
+                # Redimensionner à 224x224
+                img_resized = np.asarray(Image.fromarray(img_rgb).resize((224, 224)), dtype=np.uint8)
+                image_batch_uint8 = np.expand_dims(img_resized, axis=0)
+
+                gokart_model, preprocess_uint8_batch, device = _load_shap_gokart_model(str(model_choice))
+
+                # Background: circuit vide si dispo, sinon image courante répétée
+                bg_imgs = _load_shap_background_uint8(limit=8)
+                bg_ready: list[np.ndarray] = []
+                for b in bg_imgs:
+                    b2 = b
+                    if apply_roi and roi_for_shap is not None:
+                        try:
+                            b2 = _apply_roi_uint8(b2, roi_for_shap)
+                        except Exception:
+                            b2 = b
+                    b2 = np.asarray(Image.fromarray(b2).resize((224, 224)), dtype=np.uint8)
+                    bg_ready.append(b2)
+
+                if not bg_ready:
+                    bg_ready = [img_resized for _ in range(4)]
+
+                import torch
+
+                background_tensor = preprocess_uint8_batch(np.stack(bg_ready, axis=0))
+                image_tensor = preprocess_uint8_batch(image_batch_uint8)
+
+                with torch.no_grad():
+                    p_go = float(gokart_model(image_tensor).squeeze().detach().cpu().item())
+
+                explainer = shap.GradientExplainer(gokart_model, background_tensor)
+                shap_values = explainer.shap_values(image_tensor)
+                if isinstance(shap_values, list):
+                    shap_values = shap_values[0]
+
+                shap_values = np.asarray(shap_values)
+                if shap_values.ndim >= 4 and shap_values.shape[-1] == 1:
+                    shap_values = np.squeeze(shap_values, axis=-1)
+                if shap_values.ndim == 5:
+                    if shap_values.shape[1] == 1:
+                        shap_values = shap_values[:, 0]
+                    elif shap_values.shape[0] == 1:
+                        shap_values = shap_values[0]
+                elif shap_values.ndim == 3:
+                    shap_values = shap_values[None, ...]
+
+                if shap_values.ndim != 4:
+                    raise RuntimeError(f"Forme SHAP inattendue: {shap_values.shape}")
+
+                if shap_values.shape[1] == 3:
+                    shap_values_nhwc = np.transpose(shap_values, (0, 2, 3, 1))
+                elif shap_values.shape[-1] == 3:
+                    shap_values_nhwc = shap_values
+                else:
+                    raise RuntimeError(f"Canaux SHAP inattendus: {shap_values.shape}")
+
+                st.write({"P(go_kart)": round(p_go, 4), "device": str(device)})
+
+                plt.figure(figsize=(10, 4))
+                shap.image_plot([shap_values_nhwc], image_batch_uint8, show=False)
+                st.pyplot(plt.gcf(), clear_figure=True)
+
+                # Sauvegarde optionnelle dans le run_dir
+                shap_dir = run_dir / "shap"
+                shap_dir.mkdir(exist_ok=True)
+                out_path = shap_dir / f"{img_name}_shap_go_kart.png"
+                plt.savefig(out_path, bbox_inches="tight", dpi=180)
+                plt.close("all")
+                st.success(f"SHAP sauvegardé: {out_path}")
 
     st.subheader("Fichiers de sortie")
     st.write(
