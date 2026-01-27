@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+.venv/
+
+.streamlit_cache/
+
+# Outputs / generated
+output_video_analysis/
+extracted_empty_circuit/
+
+# Large videos (GitHub blocks >100MB; your kart_video.mp4 is multi-GB)
+*.mp4

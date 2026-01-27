@@ -1,0 +1,12 @@
+# Streamlit configuration
+# Docs: https://docs.streamlit.io/develop/api-reference/configuration
+
+[server]
+# Default is 200 (MB). Increase for local/self-hosted usage.
+maxUploadSize = 5000
+# For large payloads; keep aligned with maxUploadSize.
+maxMessageSize = 5000
+
+[browser]
+# Disable Streamlit telemetry prompt/collection (optional)
+gatherUsageStats = false
