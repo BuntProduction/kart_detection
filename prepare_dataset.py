@@ -1,6 +1,7 @@
 import os
 import shutil
 import random
+from pathlib import Path
 
 def prepare_binary_dataset():
     """
@@ -9,13 +10,15 @@ def prepare_binary_dataset():
     - no_kart: images de routes (sans kart)
     """
     
-    # Chemins source
-    kart_source = r"c:\Users\gatie\Downloads\hqn7yuibkl9q5oufmmcwg\images.cv_hqn7yuibkl9q5oufmmcwg\data"
-    road_broken = r"c:\Users\gatie\Downloads\archive (1)\Road Classification\Broken"
-    road_not_broken = r"c:\Users\gatie\Downloads\archive (1)\Road Classification\Not Broken"
-    
-    # Chemin destination
-    output_dir = r"c:\Users\gatie\Downloads\hqn7yuibkl9q5oufmmcwg\images.cv_hqn7yuibkl9q5oufmmcwg\data_binary"
+    project_dir = Path(__file__).resolve().parent
+
+    # Chemins source (relatifs au projet)
+    kart_source = project_dir / 'data'
+    road_broken = project_dir / 'Road Classification' / 'Broken'
+    road_not_broken = project_dir / 'Road Classification' / 'Not Broken'
+
+    # Chemin destination (dans le projet)
+    output_dir = project_dir / 'data_binary'
     
     print("🔧 Préparation du dataset binaire...")
     print("="*60)
@@ -23,18 +26,18 @@ def prepare_binary_dataset():
     # Créer la structure de dossiers
     for split in ['train', 'val', 'test']:
         for class_name in ['go_kart', 'no_kart']:
-            os.makedirs(os.path.join(output_dir, split, class_name), exist_ok=True)
+            os.makedirs(output_dir / split / class_name, exist_ok=True)
     
     # 1. Copier les images de karts (déjà organisées)
     print("\n📦 Copie des images de karts...")
     for split in ['train', 'val', 'test']:
-        src_dir = os.path.join(kart_source, split, 'go_kart')
-        dst_dir = os.path.join(output_dir, split, 'go_kart')
+        src_dir = kart_source / split / 'go_kart'
+        dst_dir = output_dir / split / 'go_kart'
         
-        if os.path.exists(src_dir):
-            files = [f for f in os.listdir(src_dir) if f.endswith('.jpg')]
+        if src_dir.exists():
+            files = [f for f in os.listdir(src_dir) if f.lower().endswith('.jpg')]
             for file in files:
-                shutil.copy2(os.path.join(src_dir, file), os.path.join(dst_dir, file))
+                shutil.copy2(src_dir / file, dst_dir / file)
             print(f"  ✓ {split}: {len(files)} images de karts copiées")
     
     # 2. Collecter toutes les images de routes
@@ -42,14 +45,14 @@ def prepare_binary_dataset():
     road_images = []
     
     # Images de routes cassées
-    if os.path.exists(road_broken):
-        broken_files = [os.path.join(road_broken, f) for f in os.listdir(road_broken) if f.endswith('.jpg')]
+    if road_broken.exists():
+        broken_files = [str(road_broken / f) for f in os.listdir(road_broken) if f.lower().endswith('.jpg')]
         road_images.extend(broken_files)
         print(f"  ✓ {len(broken_files)} images de routes cassées")
     
     # Images de routes non cassées
-    if os.path.exists(road_not_broken):
-        not_broken_files = [os.path.join(road_not_broken, f) for f in os.listdir(road_not_broken) if f.endswith('.jpg')]
+    if road_not_broken.exists():
+        not_broken_files = [str(road_not_broken / f) for f in os.listdir(road_not_broken) if f.lower().endswith('.jpg')]
         road_images.extend(not_broken_files)
         print(f"  ✓ {len(not_broken_files)} images de routes non cassées")
     
@@ -82,10 +85,10 @@ def prepare_binary_dataset():
     }
     
     for split, images in splits_data.items():
-        dst_dir = os.path.join(output_dir, split, 'no_kart')
+        dst_dir = output_dir / split / 'no_kart'
         for i, img_path in enumerate(images):
             ext = os.path.splitext(img_path)[1]
-            dst_path = os.path.join(dst_dir, f'road_{i:04d}{ext}')
+            dst_path = dst_dir / f'road_{i:04d}{ext}'
             shutil.copy2(img_path, dst_path)
         print(f"  ✓ {split}: {len(images)} images no_kart copiées")
     
@@ -95,8 +98,8 @@ def prepare_binary_dataset():
     print("="*60)
     
     for split in ['train', 'val', 'test']:
-        kart_count = len(os.listdir(os.path.join(output_dir, split, 'go_kart')))
-        no_kart_count = len(os.listdir(os.path.join(output_dir, split, 'no_kart')))
+        kart_count = len(os.listdir(output_dir / split / 'go_kart'))
+        no_kart_count = len(os.listdir(output_dir / split / 'no_kart'))
         total_count = kart_count + no_kart_count
         
         print(f"\n{split.upper()}:")
@@ -107,7 +110,7 @@ def prepare_binary_dataset():
     print(f"\n📁 Dataset créé dans: {output_dir}")
     print("\n🎯 Prochaine étape: Lancez 'python train.py' pour entraîner le modèle!")
     
-    return output_dir
+    return str(output_dir)
 
 if __name__ == "__main__":
     dataset_path = prepare_binary_dataset()

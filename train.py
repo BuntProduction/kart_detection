@@ -7,12 +7,15 @@ import os
 import time
 from tqdm import tqdm
 import json
+from pathlib import Path
 
 # Configuration
 class Config:
     # Chemins
-    DATA_DIR = r"c:\Users\gatie\Downloads\hqn7yuibkl9q5oufmmcwg\images.cv_hqn7yuibkl9q5oufmmcwg\data_enhanced"
-    MODEL_SAVE_PATH = "models"
+    PROJECT_DIR = Path(__file__).resolve().parent
+    # Par défaut: dataset généré localement via prepare_enhanced_dataset.py
+    DATA_DIR = Path(os.environ.get('KART_DATA_DIR', PROJECT_DIR / 'data_enhanced'))
+    MODEL_SAVE_PATH = str(PROJECT_DIR / 'models')
     
     # Hyperparamètres
     BATCH_SIZE = 32
@@ -46,19 +49,21 @@ def get_data_transforms():
 def load_datasets():
     """Charger les datasets"""
     train_transforms, val_transforms = get_data_transforms()
+
+    data_dir = str(Config.DATA_DIR)
     
     train_dataset = datasets.ImageFolder(
-        root=os.path.join(Config.DATA_DIR, 'train'),
+        root=os.path.join(data_dir, 'train'),
         transform=train_transforms
     )
     
     val_dataset = datasets.ImageFolder(
-        root=os.path.join(Config.DATA_DIR, 'val'),
+        root=os.path.join(data_dir, 'val'),
         transform=val_transforms
     )
     
     test_dataset = datasets.ImageFolder(
-        root=os.path.join(Config.DATA_DIR, 'test'),
+        root=os.path.join(data_dir, 'test'),
         transform=val_transforms
     )
     
