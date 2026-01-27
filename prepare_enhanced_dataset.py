@@ -43,6 +43,7 @@ def prepare_enhanced_dataset():
     
     # 1. Copier les images de karts (déjà organisées)
     print("\n📦 1. Copie des images de KARTS...")
+    kart_total = 0
     for split in ['train', 'val', 'test']:
         src_dir = kart_source / split / 'go_kart'
         dst_dir = output_dir / split / 'go_kart'
@@ -52,6 +53,7 @@ def prepare_enhanced_dataset():
             for file in files:
                 shutil.copy2(src_dir / file, dst_dir / file)
             print(f"  ✓ {split}: {len(files)} images de karts")
+            kart_total += len(files)
     
     # 2. Collecter toutes les images NO_KART
     print("\n📦 2. Collecte des images NO_KART...")
@@ -90,19 +92,6 @@ def prepare_enhanced_dataset():
         no_kart_images.extend(circuit_files)
         print(f"  ✓ Circuit vide: {len(circuit_files)} images")
     
-    # Vélos (prendre un échantillon)
-    if bicycle_dir.exists():
-        # On ignore bicycle/labels et on récupère les images à la racine
-        bicycle_files = [
-            f for f in os.listdir(bicycle_dir)
-            if _is_image_file(f) and not (bicycle_dir / f).is_dir()
-        ]
-        random.seed(42)
-        bicycle_sample = random.sample(bicycle_files, min(200, len(bicycle_files)))
-        bicycle_paths = [(str(bicycle_dir / f), 'bicycle') for f in bicycle_sample]
-        no_kart_images.extend(bicycle_paths)
-        print(f"  ✓ Vélos: {len(bicycle_paths)} images (échantillon)")
-
     # No_kart manuel (dossier local du projet)
     if manual_no_kart_dir.exists():
         manual_files = [
@@ -112,6 +101,27 @@ def prepare_enhanced_dataset():
         manual_paths = [(str(manual_no_kart_dir / f), 'manual') for f in manual_files]
         no_kart_images.extend(manual_paths)
         print(f"  ✓ No_kart manuel: {len(manual_paths)} images")
+
+    # Vélos (ajusté pour équilibrer ~ autant de no_kart que de go_kart)
+    if bicycle_dir.exists():
+        # On ignore bicycle/labels et on récupère les images à la racine
+        bicycle_files = [
+            f for f in os.listdir(bicycle_dir)
+            if _is_image_file(f) and not (bicycle_dir / f).is_dir()
+        ]
+
+        desired_no_kart_total = max(0, int(kart_total))
+        bicycle_needed = max(0, desired_no_kart_total - len(no_kart_images))
+
+        random.seed(42)
+        if bicycle_needed >= len(bicycle_files):
+            bicycle_sample = bicycle_files
+        else:
+            bicycle_sample = random.sample(bicycle_files, bicycle_needed)
+
+        bicycle_paths = [(str(bicycle_dir / f), 'bicycle') for f in bicycle_sample]
+        no_kart_images.extend(bicycle_paths)
+        print(f"  ✓ Vélos: {len(bicycle_paths)} images (pour équilibrer)")
     
     print(f"\n  📊 TOTAL NO_KART: {len(no_kart_images)} images")
     

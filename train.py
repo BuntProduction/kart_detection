@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 from torchvision import datasets, transforms, models
 import os
 import time
@@ -71,10 +71,26 @@ def load_datasets():
 
 def create_data_loaders(train_dataset, val_dataset, test_dataset):
     """Créer les data loaders"""
+    # Équilibrage des classes: évite un biais qui peut mener à des faux positifs
+    # si le dataset est très déséquilibré.
+    targets = torch.tensor(getattr(train_dataset, 'targets', []), dtype=torch.long)
+    sampler = None
+    if targets.numel() > 0:
+        class_counts = torch.bincount(targets)
+        if class_counts.numel() >= 2 and torch.all(class_counts[:2] > 0):
+            weight_per_class = 1.0 / class_counts.float()
+            sample_weights = weight_per_class[targets]
+            sampler = WeightedRandomSampler(
+                weights=sample_weights,
+                num_samples=len(sample_weights),
+                replacement=True,
+            )
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=Config.BATCH_SIZE,
-        shuffle=True,
+        shuffle=(sampler is None),
+        sampler=sampler,
         num_workers=0,
         pin_memory=True
     )
@@ -212,6 +228,14 @@ def train_model():
     print(f"Nombre d'images de test : {len(test_dataset)}")
     print(f"Classes : {train_dataset.classes}")
     print(f"class_to_idx : {train_dataset.class_to_idx}")
+
+    # Garde-fou: si tu entraînes sur un dossier qui contient uniquement go_kart,
+    # le modèle va apprendre à dire "kart" tout le temps.
+    if len(train_dataset.classes) < 2:
+        raise ValueError(
+            "Dataset invalide: il faut 2 classes (go_kart et no_kart). "
+            "Génère d'abord un dataset binaire via prepare_enhanced_dataset.py (data_enhanced/...)."
+        )
     
     # Créer le modèle
     model = create_model()
