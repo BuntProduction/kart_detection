@@ -19,7 +19,7 @@ class Config:
     
     # Hyperparamètres
     BATCH_SIZE = 32
-    NUM_EPOCHS = 20
+    NUM_EPOCHS = 10
     LEARNING_RATE = 0.001
     IMG_SIZE = 224
     NUM_CLASSES = 2  # kart / no_kart (binaire)

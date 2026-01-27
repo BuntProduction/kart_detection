@@ -36,7 +36,9 @@ def prepare_enhanced_dataset():
     print(f"  • No_kart manuel: {manual_no_kart_dir.name}")
     print("=" * 70)
     
-    # Créer la structure de dossiers
+    # (Re)créer la structure de dossiers (on nettoie pour éviter les doublons)
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
     for split in ['train', 'val', 'test']:
         for class_name in ['go_kart', 'no_kart']:
             os.makedirs(output_dir / split / class_name, exist_ok=True)
@@ -60,55 +62,54 @@ def prepare_enhanced_dataset():
     no_kart_images = []
 
     def _is_image_file(filename: str) -> bool:
-        return os.path.splitext(filename)[1].lower() in {".jpg", ".jpeg", ".png", ".bmp"}
+        return os.path.splitext(filename)[1].lower() in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+
+    def _collect_images_recursive(root: Path) -> list[Path]:
+        if not root.exists():
+            return []
+
+        paths: list[Path] = []
+        for p in root.rglob("*"):
+            if p.is_file() and _is_image_file(p.name):
+                paths.append(p)
+        return paths
     
     # Routes cassées
     if road_broken.exists():
-        broken_files = [
-            (str(road_broken / f), 'road_broken')
-            for f in os.listdir(road_broken)
-            if f.lower().endswith('.jpg')
-        ]
+        broken_paths = [p for p in _collect_images_recursive(road_broken)]
+        broken_files = [(str(p), 'road_broken') for p in broken_paths]
         no_kart_images.extend(broken_files)
         print(f"  ✓ Routes cassées: {len(broken_files)} images")
     
     # Routes non cassées
     if road_not_broken.exists():
-        not_broken_files = [
-            (str(road_not_broken / f), 'road_ok')
-            for f in os.listdir(road_not_broken)
-            if f.lower().endswith('.jpg')
-        ]
+        not_broken_paths = [p for p in _collect_images_recursive(road_not_broken)]
+        not_broken_files = [(str(p), 'road_ok') for p in not_broken_paths]
         no_kart_images.extend(not_broken_files)
         print(f"  ✓ Routes intactes: {len(not_broken_files)} images")
     
     # Circuit vide
     if circuit_empty.exists():
-        circuit_files = [
-            (str(circuit_empty / f), 'circuit')
-            for f in os.listdir(circuit_empty)
-            if f.lower().endswith('.jpg')
-        ]
+        circuit_paths = [p for p in _collect_images_recursive(circuit_empty)]
+        circuit_files = [(str(p), 'circuit') for p in circuit_paths]
         no_kart_images.extend(circuit_files)
         print(f"  ✓ Circuit vide: {len(circuit_files)} images")
     
-    # No_kart manuel (dossier local du projet)
+    # No_kart manuel (dossier local du projet) — récursif pour inclure No kart/generated/
     if manual_no_kart_dir.exists():
-        manual_files = [
-            f for f in os.listdir(manual_no_kart_dir)
-            if _is_image_file(f) and not (manual_no_kart_dir / f).is_dir()
-        ]
-        manual_paths = [(str(manual_no_kart_dir / f), 'manual') for f in manual_files]
+        manual_paths_list = _collect_images_recursive(manual_no_kart_dir)
+        manual_paths = [(str(p), 'manual') for p in manual_paths_list]
         no_kart_images.extend(manual_paths)
-        print(f"  ✓ No_kart manuel: {len(manual_paths)} images")
+        print(f"  ✓ No_kart manuel: {len(manual_paths)} images (inclut sous-dossiers)")
 
     # Vélos (ajusté pour équilibrer ~ autant de no_kart que de go_kart)
     if bicycle_dir.exists():
-        # On ignore bicycle/labels et on récupère les images à la racine
-        bicycle_files = [
-            f for f in os.listdir(bicycle_dir)
-            if _is_image_file(f) and not (bicycle_dir / f).is_dir()
-        ]
+        # Récursif, mais on ignore explicitement le dossier labels/
+        bicycle_files = []
+        for p in _collect_images_recursive(bicycle_dir):
+            if 'labels' in p.parts:
+                continue
+            bicycle_files.append(p)
 
         desired_no_kart_total = max(0, int(kart_total))
         bicycle_needed = max(0, desired_no_kart_total - len(no_kart_images))
@@ -119,7 +120,7 @@ def prepare_enhanced_dataset():
         else:
             bicycle_sample = random.sample(bicycle_files, bicycle_needed)
 
-        bicycle_paths = [(str(bicycle_dir / f), 'bicycle') for f in bicycle_sample]
+        bicycle_paths = [(str(p), 'bicycle') for p in bicycle_sample]
         no_kart_images.extend(bicycle_paths)
         print(f"  ✓ Vélos: {len(bicycle_paths)} images (pour équilibrer)")
     
