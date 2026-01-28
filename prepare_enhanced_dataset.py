@@ -22,6 +22,7 @@ def prepare_enhanced_dataset():
     circuit_empty = project_dir / 'extracted_empty_circuit'
     bicycle_dir = project_dir / 'bicycle'
     manual_no_kart_dir = project_dir / 'No kart'
+    false_positives_dir = project_dir / 'faux_positifs'
 
     # Chemin destination (dans le projet)
     output_dir = project_dir / 'data_enhanced'
@@ -34,6 +35,7 @@ def prepare_enhanced_dataset():
     print("  • Circuit vide: Frames extraites de la vidéo")
     print("  • Vélos: Dataset complémentaire")
     print(f"  • No_kart manuel: {manual_no_kart_dir.name}")
+    print(f"  • Faux positifs (à trier): {false_positives_dir.name}")
     print("=" * 70)
     
     # (Re)créer la structure de dossiers (on nettoie pour éviter les doublons)
@@ -101,6 +103,13 @@ def prepare_enhanced_dataset():
         manual_paths = [(str(p), 'manual') for p in manual_paths_list]
         no_kart_images.extend(manual_paths)
         print(f"  ✓ No_kart manuel: {len(manual_paths)} images (inclut sous-dossiers)")
+
+    # Faux positifs (candidats triés ensuite) — pris en compte même si vide
+    false_positives_dir.mkdir(parents=True, exist_ok=True)
+    fp_paths_list = _collect_images_recursive(false_positives_dir)
+    fp_paths = [(str(p), 'false_positive') for p in fp_paths_list]
+    no_kart_images.extend(fp_paths)
+    print(f"  ✓ Faux positifs: {len(fp_paths)} images")
 
     # Vélos (ajusté pour équilibrer ~ autant de no_kart que de go_kart)
     if bicycle_dir.exists():

@@ -8,6 +8,8 @@ import time
 from tqdm import tqdm
 import json
 from pathlib import Path
+import mlflow
+import mlflow.pytorch
 
 # Configuration
 class Config:
@@ -26,6 +28,10 @@ class Config:
     
     # Device
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # MLflow
+    MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://127.0.0.1:5000')
+    MLFLOW_EXPERIMENT_NAME = "kart_detector"
 
 def get_data_transforms():
     """Définir les transformations pour l'augmentation de données"""
@@ -216,7 +222,12 @@ def save_model(model, epoch, val_acc, optimizer, history, class_to_idx=None, cla
 
 def train_model():
     """Fonction principale d'entraînement"""
+    # Configuration MLflow
+    mlflow.set_tracking_uri(Config.MLFLOW_TRACKING_URI)
+    mlflow.set_experiment(Config.MLFLOW_EXPERIMENT_NAME)
+    
     print(f"Device utilisé : {Config.DEVICE}")
+    print(f"MLflow tracking URI: {Config.MLFLOW_TRACKING_URI}")
     print(f"Chargement des données...")
     
     # Charger les données
@@ -255,8 +266,23 @@ def train_model():
     
     best_val_acc = 0.0
     
-    print("\nDébut de l'entraînement...")
-    for epoch in range(Config.NUM_EPOCHS):
+    # Démarrer un run MLflow
+    with mlflow.start_run():
+        # Logger les hyperparamètres
+        mlflow.log_params({
+            "batch_size": Config.BATCH_SIZE,
+            "num_epochs": Config.NUM_EPOCHS,
+            "learning_rate": Config.LEARNING_RATE,
+            "img_size": Config.IMG_SIZE,
+            "optimizer": "Adam",
+            "model_architecture": "ResNet18",
+            "num_train_images": len(train_dataset),
+            "num_val_images": len(val_dataset),
+            "num_test_images": len(test_dataset),
+        })
+        
+        print("\nDébut de l'entraînement...")
+        for epoch in range(Config.NUM_EPOCHS):
         print(f"\nÉpoque {epoch + 1}/{Config.NUM_EPOCHS}")
         print("-" * 50)
         
@@ -275,6 +301,14 @@ def train_model():
         history['val_loss'].append(val_loss)
         history['val_acc'].append(val_acc)
         
+        # Logger les métriques dans MLflow
+        mlflow.log_metrics({
+            "train_loss": train_loss,
+            "train_acc": train_acc,
+            "val_loss": val_loss,
+            "val_acc": val_acc,
+        }, step=epoch)
+        
         print(f"\nTrain Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
         print(f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.2f}%")
         
@@ -291,19 +325,36 @@ def train_model():
                 classes=train_dataset.classes,
             )
             print(f"✓ Nouveau meilleur modèle sauvegardé!")
-    
-    # Évaluation finale sur le test set
-    print("\n" + "="*50)
-    print("Évaluation finale sur le test set...")
-    test_loss, test_acc = validate(model, test_loader, criterion)
-    print(f"Test Loss: {test_loss:.4f} | Test Acc: {test_acc:.2f}%")
-    
-    # Sauvegarder l'historique
-    with open(os.path.join(Config.MODEL_SAVE_PATH, 'training_history.json'), 'w') as f:
-        json.dump(history, f, indent=4)
-    
-    print("\nEntraînement terminé!")
-    return model, history
+        
+        # Évaluation finale sur le test set
+        print("\n" + "="*50)
+        print("Évaluation finale sur le test set...")
+        test_loss, test_acc = validate(model, test_loader, criterion)
+        print(f"Test Loss: {test_loss:.4f} | Test Acc: {test_acc:.2f}%")
+        
+        # Logger les métriques finales
+        mlflow.log_metrics({
+            "test_loss": test_loss,
+            "test_acc": test_acc,
+            "best_val_acc": best_val_acc,
+        })
+        
+        # Logger le modèle dans MLflow
+        print("\nSauvegarde du modèle dans MLflow...")
+        mlflow.pytorch.log_model(
+            model,
+            "model",
+            registered_model_name="kart_detector",
+        )
+        
+        # Sauvegarder l'historique
+        history_path = os.path.join(Config.MODEL_SAVE_PATH, 'training_history.json')
+        with open(history_path, 'w') as f:
+            json.dump(history, f, indent=4)
+        mlflow.log_artifact(history_path)
+        
+        print("\nEntraînement terminé!")
+        return model, history
 
 if __name__ == "__main__":
     model, history = train_model()

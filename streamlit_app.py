@@ -22,7 +22,15 @@ except Exception:
 if st_canvas is not None and not hasattr(st_image, "image_to_url"):
     st_canvas = None
 
+try:
+    import mlflow
+    import mlflow.pytorch
+    MLFLOW_AVAILABLE = True
+except ImportError:
+    MLFLOW_AVAILABLE = False
+
 from video_detector import VideoKartDetector
+from collect_false_positives import collect_false_positive_candidates
 
 
 APP_TITLE = "Kart detector (vidéo)"
@@ -31,12 +39,43 @@ APP_TITLE = "Kart detector (vidéo)"
 CACHE_DIR = Path(".streamlit_cache")
 CACHE_UPLOADS_DIR = CACHE_DIR / "uploads"
 
+# Configuration MLflow
+MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://127.0.0.1:5000')
+
+
+def list_mlflow_models():
+    """Lister les modèles disponibles dans MLflow"""
+    if not MLFLOW_AVAILABLE:
+        return []
+    
+    try:
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        client = mlflow.MlflowClient()
+        
+        # Récupérer les versions du modèle enregistré
+        model_name = "kart_detector"
+        try:
+            versions = client.search_model_versions(f"name='{model_name}'")
+            return [(f"MLflow: {model_name}/v{v.version}", f"models:/{model_name}/{v.version}") 
+                    for v in sorted(versions, key=lambda x: int(x.version), reverse=True)]
+        except Exception:
+            return []
+    except Exception:
+        return []
+
 
 def list_models(models_dir: str = "models"):
     models_path = Path(models_dir)
     if not models_path.exists():
         return []
-    return sorted(models_path.glob("*.pth"), key=lambda p: p.stat().st_mtime, reverse=True)
+    local_models = sorted(models_path.glob("*.pth"), key=lambda p: p.stat().st_mtime, reverse=True)
+    
+    # Combiner avec les modèles MLflow
+    all_models = [(f"Local: {p.name}", str(p)) for p in local_models]
+    mlflow_models = list_mlflow_models()
+    all_models.extend(mlflow_models)
+    
+    return all_models
 
 
 def read_first_frame(video_path: str):
@@ -58,6 +97,13 @@ def bgr_to_rgb(frame_bgr: np.ndarray) -> np.ndarray:
 
 
 def ensure_run_dir(base_dir: str = "output_video_analysis") -> Path:
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = Path(base_dir) / f"run_{run_id}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
+
+
+def ensure_false_positives_dir(base_dir: str = "faux_positifs") -> Path:
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = Path(base_dir) / f"run_{run_id}"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -210,7 +256,7 @@ if not models:
 model_choice = st.selectbox(
     "Modèle à utiliser",
     options=models,
-    format_func=lambda p: p.name,
+    format_func=lambda p: p[0],  # p est un tuple (nom, chemin)
 )
 
 uploaded = st.file_uploader("Dépose ta vidéo (mp4)", type=["mp4", "mov", "avi", "mkv"])
@@ -293,12 +339,35 @@ with st.expander("Aide / conseils ROI", expanded=False):
 
 run_btn = st.button("Lancer l'analyse", type="primary")
 
+st.divider()
+st.subheader("Récupérer les faux positifs (à trier)")
+st.caption(
+    "Collecte automatiquement les frames/ROI dont le score est dans une zone grise (ex: 0.50–0.80). "
+    "Tu pourras ensuite trier manuellement et réutiliser ces images comme négatifs."
+)
+
+fp_c1, fp_c2, fp_c3 = st.columns([1, 1, 1])
+with fp_c1:
+    fp_min = st.slider("Seuil min (candidats)", min_value=0.0, max_value=1.0, value=0.50, step=0.01)
+with fp_c2:
+    fp_max = st.slider("Seuil max (candidats)", min_value=0.0, max_value=1.0, value=0.80, step=0.01)
+with fp_c3:
+    fp_frame_skip = st.number_input("Frame skip (FP)", min_value=1, max_value=60, value=int(frame_skip), step=1)
+
+fp_max_samples = st.number_input("Max candidats à sauvegarder", min_value=10, max_value=5000, value=500, step=50)
+fp_min_gap = st.number_input("Écart min entre sauvegardes (frames)", min_value=0, max_value=300, value=10, step=1)
+fp_save_full = st.checkbox("Sauver aussi la frame complète annotée", value=False)
+
+fp_btn = st.button("Recuperer les faux positifs", type="secondary")
+
 if run_btn:
     # Créer un dossier de run uniquement au click (évite d'en créer plein au moindre changement de widget)
     run_dir = ensure_run_dir(output_base)
     st.session_state["last_run_dir"] = str(run_dir)
 
-    detector = VideoKartDetector(model_path=str(model_choice), video_path=str(video_path), roi=roi)
+    # model_choice est un tuple (nom, chemin)
+    model_path = model_choice[1]
+    detector = VideoKartDetector(model_path=str(model_path), video_path=str(video_path), roi=roi)
 
     progress = st.progress(0)
     status = st.empty()
@@ -331,6 +400,52 @@ if run_btn:
         "roi": roi,
         "output_dir": str(run_dir),
     }
+
+
+if fp_btn:
+    if fp_min > fp_max:
+        st.error("Le seuil min doit être <= au seuil max.")
+    else:
+        fp_run_dir = ensure_false_positives_dir("faux_positifs")
+        st.session_state["last_fp_dir"] = str(fp_run_dir)
+
+        progress = st.progress(0)
+        status = st.empty()
+
+        def on_progress_fp(frame_idx, total):
+            if total and total > 0:
+                p = min(1.0, max(0.0, frame_idx / float(total)))
+                progress.progress(int(p * 100))
+                status.text(f"Collecte FP... frame {frame_idx}/{total}")
+
+        with st.spinner("Collecte des candidats faux-positifs (ça peut prendre un peu de temps)..."):
+            # model_choice est un tuple (nom, chemin)
+            model_path = model_choice[1]
+            samples = collect_false_positive_candidates(
+                model_path=str(model_path),
+                video_path=str(video_path),
+                roi=roi,
+                out_dir=str(fp_run_dir),
+                min_score=float(fp_min),
+                max_score=float(fp_max),
+                frame_skip=int(fp_frame_skip),
+                max_samples=int(fp_max_samples),
+                min_gap_frames=int(fp_min_gap),
+                save_full_frames=bool(fp_save_full),
+                progress_callback=on_progress_fp,
+            )
+
+        progress.progress(100)
+        status.text(f"Terminé: {len(samples)} candidats sauvegardés dans {fp_run_dir}")
+        st.success(f"OK: {len(samples)} candidats sauvegardés")
+
+        # Aperçu
+        roi_dir = fp_run_dir / "roi"
+        if roi_dir.exists():
+            imgs = sorted(roi_dir.glob("*.jpg"))
+            if imgs:
+                st.image([str(p) for p in imgs[:30]], width="stretch")
+        st.write({"manifest": str(fp_run_dir / "manifest.json")})
 
 
 # Affichage des résultats du dernier run (évite de recalculer/relister à chaque rerun)
@@ -450,7 +565,9 @@ if last_run_dir and Path(last_run_dir).exists() and last_summary:
                 img_resized = np.asarray(Image.fromarray(img_rgb).resize((224, 224)), dtype=np.uint8)
                 image_batch_uint8 = np.expand_dims(img_resized, axis=0)
 
-                gokart_model, preprocess_uint8_batch, device = _load_shap_gokart_model(str(model_choice))
+                # model_choice est un tuple (nom, chemin)
+                model_path = model_choice[1]
+                gokart_model, preprocess_uint8_batch, device = _load_shap_gokart_model(str(model_path))
 
                 # Background: circuit vide si dispo, sinon image courante répétée
                 bg_imgs = _load_shap_background_uint8(limit=8)

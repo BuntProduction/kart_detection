@@ -1,0 +1,57 @@
+{
+  "video": ".streamlit_cache\\uploads\\kart_cut.mp4",
+  "model": "models\\kart_detector_epoch_2_acc_98.09.pth",
+  "roi": [
+    1987,
+    1130,
+    300,
+    200
+  ],
+  "min_score": 0.5,
+  "max_score": 0.8,
+  "frame_skip": 30,
+  "max_samples": 500,
+  "min_gap_frames": 1,
+  "count": 3,
+  "samples": [
+    {
+      "frame": 780,
+      "timestamp_s": 26.026,
+      "probability": 0.7613301873207092,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_162620\\roi\\fp_frame_000780_t_26.03_p_0.761.jpg",
+      "full_path": "faux_positifs\\run_20260127_162620\\frames\\fp_frame_000780_p_0.761.jpg"
+    },
+    {
+      "frame": 2460,
+      "timestamp_s": 82.08200000000001,
+      "probability": 0.737542062997818,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_162620\\roi\\fp_frame_002460_t_82.08_p_0.738.jpg",
+      "full_path": "faux_positifs\\run_20260127_162620\\frames\\fp_frame_002460_p_0.738.jpg"
+    },
+    {
+      "frame": 2490,
+      "timestamp_s": 83.083,
+      "probability": 0.5647009611129761,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_162620\\roi\\fp_frame_002490_t_83.08_p_0.565.jpg",
+      "full_path": "faux_positifs\\run_20260127_162620\\frames\\fp_frame_002490_p_0.565.jpg"
+    }
+  ]
+}

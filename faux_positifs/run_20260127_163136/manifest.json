@@ -1,0 +1,161 @@
+{
+  "video": ".streamlit_cache\\uploads\\kart_cut.mp4",
+  "model": "models\\kart_detector_epoch_2_acc_98.09.pth",
+  "roi": [
+    1987,
+    1130,
+    300,
+    200
+  ],
+  "min_score": 0.5,
+  "max_score": 0.8,
+  "frame_skip": 5,
+  "max_samples": 500,
+  "min_gap_frames": 1,
+  "count": 11,
+  "samples": [
+    {
+      "frame": 115,
+      "timestamp_s": 3.8371666666666666,
+      "probability": 0.6428297460079193,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_163136\\roi\\fp_frame_000115_t_3.84_p_0.643.jpg",
+      "full_path": "faux_positifs\\run_20260127_163136\\frames\\fp_frame_000115_p_0.643.jpg"
+    },
+    {
+      "frame": 125,
+      "timestamp_s": 4.170833333333333,
+      "probability": 0.7862282693386078,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_163136\\roi\\fp_frame_000125_t_4.17_p_0.786.jpg",
+      "full_path": "faux_positifs\\run_20260127_163136\\frames\\fp_frame_000125_p_0.786.jpg"
+    },
+    {
+      "frame": 130,
+      "timestamp_s": 4.337666666666666,
+      "probability": 0.7339339256286621,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_163136\\roi\\fp_frame_000130_t_4.34_p_0.734.jpg",
+      "full_path": "faux_positifs\\run_20260127_163136\\frames\\fp_frame_000130_p_0.734.jpg"
+    },
+    {
+      "frame": 155,
+      "timestamp_s": 5.171833333333334,
+      "probability": 0.7223885357379913,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_163136\\roi\\fp_frame_000155_t_5.17_p_0.722.jpg",
+      "full_path": "faux_positifs\\run_20260127_163136\\frames\\fp_frame_000155_p_0.722.jpg"
+    },
+    {
+      "frame": 775,
+      "timestamp_s": 25.859166666666667,
+      "probability": 0.7807920426130295,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_163136\\roi\\fp_frame_000775_t_25.86_p_0.781.jpg",
+      "full_path": "faux_positifs\\run_20260127_163136\\frames\\fp_frame_000775_p_0.781.jpg"
+    },
+    {
+      "frame": 780,
+      "timestamp_s": 26.026,
+      "probability": 0.7613301873207092,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_163136\\roi\\fp_frame_000780_t_26.03_p_0.761.jpg",
+      "full_path": "faux_positifs\\run_20260127_163136\\frames\\fp_frame_000780_p_0.761.jpg"
+    },
+    {
+      "frame": 2415,
+      "timestamp_s": 80.5805,
+      "probability": 0.7536251842975616,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_163136\\roi\\fp_frame_002415_t_80.58_p_0.754.jpg",
+      "full_path": "faux_positifs\\run_20260127_163136\\frames\\fp_frame_002415_p_0.754.jpg"
+    },
+    {
+      "frame": 2455,
+      "timestamp_s": 81.91516666666666,
+      "probability": 0.6875976324081421,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_163136\\roi\\fp_frame_002455_t_81.92_p_0.688.jpg",
+      "full_path": "faux_positifs\\run_20260127_163136\\frames\\fp_frame_002455_p_0.688.jpg"
+    },
+    {
+      "frame": 2460,
+      "timestamp_s": 82.08200000000001,
+      "probability": 0.737542062997818,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_163136\\roi\\fp_frame_002460_t_82.08_p_0.738.jpg",
+      "full_path": "faux_positifs\\run_20260127_163136\\frames\\fp_frame_002460_p_0.738.jpg"
+    },
+    {
+      "frame": 2465,
+      "timestamp_s": 82.24883333333334,
+      "probability": 0.6342485547065735,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_163136\\roi\\fp_frame_002465_t_82.25_p_0.634.jpg",
+      "full_path": "faux_positifs\\run_20260127_163136\\frames\\fp_frame_002465_p_0.634.jpg"
+    },
+    {
+      "frame": 2490,
+      "timestamp_s": 83.083,
+      "probability": 0.5647009611129761,
+      "roi": [
+        1987,
+        1130,
+        300,
+        200
+      ],
+      "roi_path": "faux_positifs\\run_20260127_163136\\roi\\fp_frame_002490_t_83.08_p_0.565.jpg",
+      "full_path": "faux_positifs\\run_20260127_163136\\frames\\fp_frame_002490_p_0.565.jpg"
+    }
+  ]
+}

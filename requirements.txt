@@ -8,3 +8,4 @@ opencv-python>=4.8.0
 streamlit>=1.31.0
 streamlit-drawable-canvas>=0.9.3
 shap>=0.44.0
+mlflow>=2.9.0

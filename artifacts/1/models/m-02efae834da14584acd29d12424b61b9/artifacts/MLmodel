@@ -1,0 +1,24 @@
+artifact_path: "file:C:/Users/gatie/OneDrive/Documents/Cours Mast\xE8re 2/11 - Dev\
+  \ web data ml/artifacts/1/models/m-02efae834da14584acd29d12424b61b9/artifacts"
+flavors:
+  python_function:
+    config:
+      device: null
+    data: data
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.pytorch
+    pickle_module_name: mlflow.pytorch.pickle_module
+    python_version: 3.14.0
+  pytorch:
+    code: null
+    model_data: data
+    pytorch_version: 2.10.0+cpu
+mlflow_version: 3.8.1
+model_id: m-02efae834da14584acd29d12424b61b9
+model_size_bytes: 45318047
+model_uuid: m-02efae834da14584acd29d12424b61b9
+prompts: null
+run_id: 01603c1be90a4c2ea025d71a18d9a9a7
+utc_time_created: '2026-01-28 09:34:59.055738'
