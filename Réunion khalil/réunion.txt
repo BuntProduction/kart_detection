@@ -1,0 +1,60 @@
+Il faut faire un truc clean
+
+Etape 1 : trouver la data
+il faut avoir un bon dataset, la qualité de la donnée dépend de plusieurs critères:
+2 types de bdd : bases de données OLTP vs OLAP
+
+OLTP: très rapide mais dans un grand projet pour un modele LLM avec des go une bDD OLTP ne sera pas adapté 
+pour faire de l'analyse de donnée il faut une BDD OLAP --> on casse la normalisation pour avoir de grandes tables, en soit on a toujours OLTP et OLAP 
+on n'utilise qu'une seule tables
+on va utiliser un ETL qui va permettre de faire une bdd globale et on l'envoie vers une bdd OLAP
+
+Une fois qu'on a nos tables on va vouloir commencer à faire du preprocessing
+Purement numérique et pas textuel à part si on entraine un LLM(et encore)
+il faut detecter et changer les anomalies : doublons, valeurs manquantes, le dataset doit vraiment etre clean
+ensuite on fait de l'encoding et enfin de la normallisation (faire en sorte que les valeurs entre chaque colonnes soient similaires) --> on va donc scaler toutes les données entre 0 et 1 pour que ça soit normaliser et ça permettra de garder la meme distribution et dans le cas de valeurs negatives on peut aussi sinon mettre entre -1 et 1
+
+Pour tout le code on aura un pipeline(algos existants --> try, clone etc...)
+
+Ensuite la partie Modeling
+Machine learning (donénes tabulaires)
+CNN (imagerie)
+LLM (données textuelles)
+
+Dans le ML il ya le supervisé et le non supervisé
+dans le sueprvisé c'est l'ex des données que l'on a deja et en soit on peut connaitre les reponses et ensuite c'est pour que sans
+dans mon cas c'est du supervisé (il faudrait des données de panne par exemple, selon l'utilisation aussi du predictif de cout et de prevision d'entretien selon l'utilisation des scooters)
+--> classification binaire ou multiclasse (decisiontree, randomforest, xgboost --> ces 3 peuvent aussi des fois fonctionner pour de la régression)
+--> regression --> estimation d'un chiffre
+Pour la classification et regression il y a une liste de modeles existants (regression linaires --> vu que nos données sont liéaires, si on peut plot on peut pour chacun des biens avoir un y donc on cherche une fonction qui passe dans les points)
+bien sur la courbe de regression ne sera pas parfaite ('à peu près)
+Il faut tester plusieurs modeles pour comparer les données
+
+Dans le non supervisé c'est quand on n'a pas encore de réponses: genre setup des propfils mais on ne sait pas encore quels types de profils on peut rencontrer, et c'est au modele de créer des modèles
+ici on a ce qu'on appelle du clustering --> on regroupe par rapport à des choses
+
+on ne cherche pas à innover juste appliquer un papper existant c'est bon
+
+
+ENSUITE le TRAINING : model + parametres (data) et ensuite de prédire
+et direct après l'évaluation --> sur quels critères on juge le modèles
+il faut aussi prendre en compte le recall --> genre dire que quelque chose est grave ou non et le déterminer dans le bon sens, dans mon cas vaut mieux signaler une panne et que l'utilisateur verifie plutot que l'inverse
+il faut donc choisir une métrique et ça nous donnera un score, et ensuite on peut changer de modlees de parametres etc (2-3 modeles à tester et optimiser)
+
+Enfin ELECTION du modèle --> on choisit le model et ses paramètres optimisés
+
+Et en fin le DEPLOIEMENT du model
+le projet on doit livrer une architecture pour montrer toute la piepline du projet
+
+genre introduire les notions : de drift, monitoring
+Drift: après le déploiement on corrige en fait le modèle via des retours et pour que le modèle réapprenne à nouveau
+Le monitoring c'est juste le fait de faire du dashboard avec la précision sur une metrique etc...
+75% de chance de reussite du model c'est déja bien
+
+2 grands gros problemes: overfitting et underfitting --> on ne cherche pas à avoir exactement les mêmes données car sinon il ne va jamais généraliser
+overfitting: etre nul sur les donénes que je ne connais pas
+underfitting c'est en gros quand il arrive pas à arrievr vers les données de training et donc il est juste NUL mdr
+
+Comment corriger ça ? exemple : on va faire des splits : genre on lui donne que 7000 entrées sur les 3000 et ça servira de système de test afin  de l'évaluer --> est-ce qu'il est bon, arrive à généraliser, à prédire
+
+pour un mémoire il faut rendre sur du Latex et pas du word
